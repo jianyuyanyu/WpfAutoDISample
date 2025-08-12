@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using WpfAutoDISample.Common;
 using WpfAutoDISample.Events;
 using WpfAutoDISample.Models;
+using WpfAutoDISample.Services.Contracts;
 using WpfAutoDISample.ViewModels;
 
 // ReSharper disable UnusedMember.Global
@@ -18,7 +19,7 @@ namespace WpfAutoDISample.Views;
 /// Interaction logic for MainWindow.xaml
 /// </summary>
 [DependencyInjection(ServiceLifetime.Singleton, AddSelf = true)]
-public partial class MainWindow
+public partial class MainWindow : IWindow
 {
     private const string CollectionName = nameof(MainWindow);
     private readonly ILiteCollection<MainWindowState> _coll;
@@ -64,7 +65,10 @@ public partial class MainWindow
         // 获取当前窗体的尺寸
         var width = ActualWidth;
         var height = ActualHeight;
-        _logger.LogInformation("MainWindow size changed: Width={Width}, Height={Height}", width, height);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("MainWindow size changed: Width={Width}, Height={Height}", width, height);
+        }
         // 发布事件并传递尺寸信息
         _messenger.Send(new MainWindowSizeChangeEventArgs(width, height));
     }
@@ -75,7 +79,8 @@ public partial class MainWindow
         {
             // 尝试获取窗口状态
             var state = _coll.FindById(new(new ObjectId(Uid)));
-            if (state is null) return;
+            if (state is null)
+                return;
             // 应用窗口状态
             Width = state.Width;
             Height = state.Height;
@@ -86,7 +91,10 @@ public partial class MainWindow
         {
             _db.DropCollection(CollectionName);
         }
-        _logger.LogInformation("Restored MainWindow state: Width={Width}, Height={Height}, Top={Top}, Left={Left}", Width, Height, Top, Left);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("Restored MainWindow state: Width={Width}, Height={Height}, Top={Top}, Left={Left}", Width, Height, Top, Left);
+        }
     }
 
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
@@ -100,6 +108,9 @@ public partial class MainWindow
             Top = Top,
             Left = Left
         });
-        _logger.LogInformation("Saved MainWindow state: Width={Width}, Height={Height}, Top={Top}, Left={Left}", Width, Height, Top, Left);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("Saved MainWindow state: Width={Width}, Height={Height}, Top={Top}, Left={Left}", Width, Height, Top, Left);
+        }
     }
 }

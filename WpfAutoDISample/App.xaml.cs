@@ -4,7 +4,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using WpfAutoDISample.Common;
-using WpfAutoDISample.Views;
 
 // ReSharper disable AsyncVoidMethod
 
@@ -17,15 +16,10 @@ public partial class App
 {
     private readonly ILogger<App> _logger;
 
-    /// <inheritdoc />
-    public App(ref IHost host)
-    {
-        InitializeComponent();
-        Host = host;
-        _logger = Services.GetRequiredService<ILogger<App>>();
-        MainWindow = Services.GetRequiredService<MainWindow>();
-        MainWindow.Visibility = Visibility.Visible;
-    }
+    /// <summary>
+    /// 获取当前AppHost
+    /// </summary>
+    private static IHost CurrentAppHost => (Current as App)?.Host ?? throw new InvalidOperationException("无法获取AppHost，当前Application实例不是App类型。");
 
     private IHost Host { get; }
 
@@ -35,38 +29,65 @@ public partial class App
     // ReSharper disable once MemberCanBePrivate.Global
     public static IServiceProvider Services => CurrentAppHost.Services;
 
-    /// <summary>
-    /// 获取当前AppHost
-    /// </summary>
-    private static IHost CurrentAppHost => (Current as App)?.Host ?? throw new InvalidOperationException("无法获取AppHost，当前Application实例不是App类型。");
+    /// <inheritdoc />
+    public App(ref IHost host)
+    {
+        InitializeComponent();
+        Host = host;
+        _logger = Services.GetRequiredService<ILogger<App>>();
+    }
 
     /// <inheritdoc />
     protected override async void OnExit(ExitEventArgs e)
     {
-        AppDomain.CurrentDomain.UnhandledException -= CurrentDomainUnhandledException;
-        DispatcherUnhandledException -= AppDispatcherUnhandledException;
-        TaskScheduler.UnobservedTaskException -= TaskSchedulerOnUnobservedTaskException;
-        await Host.StopAsync().ConfigureAwait(false);
-        Host.Dispose();
-        // 这里不要忘记释放
-        WinApis.Mutex?.ReleaseMutex();
-        Shutdown();
-        base.OnExit(e);
+        try
+        {
+            AppDomain.CurrentDomain.UnhandledException -= CurrentDomainUnhandledException;
+            DispatcherUnhandledException -= AppDispatcherUnhandledException;
+            TaskScheduler.UnobservedTaskException -= TaskSchedulerOnUnobservedTaskException;
+            await Host.StopAsync().ConfigureAwait(false);
+            Host.Dispose();
+            // 这里不要忘记释放
+            WinApis.Mutex?.ReleaseMutex();
+            Shutdown();
+            base.OnExit(e);
+        }
+        catch (Exception ex)
+        {
+            // 处理退出时的异常
+            if (_logger.IsEnabled(LogLevel.Error))
+            {
+                _logger.LogError(ex, "Application exit failed.");
+            }
+        }
     }
 
     /// <inheritdoc />
     protected override async void OnStartup(StartupEventArgs e)
     {
-        AppDomain.CurrentDomain.UnhandledException += CurrentDomainUnhandledException;
-        DispatcherUnhandledException += AppDispatcherUnhandledException;
-        TaskScheduler.UnobservedTaskException += TaskSchedulerOnUnobservedTaskException;
-        await Host.StartAsync().ConfigureAwait(false);
-        base.OnStartup(e);
+        try
+        {
+#if !DEBUG
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomainUnhandledException;
+            DispatcherUnhandledException += AppDispatcherUnhandledException;
+            TaskScheduler.UnobservedTaskException += TaskSchedulerOnUnobservedTaskException;
+#endif
+            await Host.StartAsync().ConfigureAwait(false);
+            base.OnStartup(e);
+        }
+        catch (Exception ex)
+        {
+            // 处理启动时的异常
+            if (_logger.IsEnabled(LogLevel.Error))
+            {
+                _logger.LogError(ex, "Application startup failed.");
+            }
+        }
     }
 
     private void CurrentDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
-        HandleException(e.ExceptionObject as Exception);
+        HandleException((Exception)e.ExceptionObject);
     }
 
     private void TaskSchedulerOnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
@@ -83,8 +104,13 @@ public partial class App
 
     private void HandleException(Exception? exception)
     {
-        if (exception is null) return;
-        _logger.LogError(exception, "Unhandled exception occurred.");
-        //MessageBox.Show("发生未处理的异常，程序将继续运行。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        if (exception is null)
+        {
+            return;
+        }
+        if (_logger.IsEnabled(LogLevel.Error))
+        {
+            _logger.LogError(exception, "Unhandled exception occurred");
+        }
     }
 }

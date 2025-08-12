@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.Messaging;
+using EasilyNET.Core.Misc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
 using WpfAutoDISample.Common;
+using WpfAutoDISample.Services;
 
 namespace WpfAutoDISample;
 
@@ -26,6 +28,7 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        AssemblyHelper.LoadFromAllDll = false;
         WinApis.EnsureSingleInstance(out var createdNew);
         if (!createdNew)
         {
@@ -78,6 +81,7 @@ public static class Program
             return;
         }
         var host = await task.ConfigureAwait(false);
+
         // 配置主窗口
         var app = new App(ref host);
         // 关闭启动画面
@@ -87,6 +91,13 @@ public static class Program
 
     private static IHostBuilder CreateHostBuilder(params string[] args) =>
         Host.CreateDefaultBuilder(args)
+            .UseEnvironment(
+#if DEBUG
+                Environments.Development
+#else
+                Environments.Production
+#endif
+            )
             .ConfigureAppConfiguration(c =>
             {
                 c.SetBasePath(AppContext.BaseDirectory);
@@ -120,6 +131,10 @@ public static class Program
             .ConfigureServices(sc =>
             {
                 sc.AddApplicationModules<AppServiceModules>();
+
+                // 用于启动应用程序MainWindow
+                sc.AddHostedService<ApplicationHostService>();
+
                 sc.AddSingleton<WeakReferenceMessenger>();
                 sc.AddSingleton<IMessenger, WeakReferenceMessenger>(sp => sp.GetRequiredService<WeakReferenceMessenger>());
                 sc.AddSingleton(_ => Application.Current.Dispatcher);
